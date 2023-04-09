@@ -12,6 +12,7 @@ class Game:
         self.characters.append(self.enemy)
         self.startGame()
 
+
     def playStep(self):
         for character in self.characters:
             character.Move()
@@ -30,7 +31,7 @@ class Game:
                     running = False
 
             #draw to Screen
-            screen.fill((255, 255, 255))
+            screen.fill((134, 126, 255))
             for character in self.characters:
                 character.draw(screen)
                 for bullet in character.bullets:
@@ -143,6 +144,3 @@ class Bullet:
 
     def draw(self, screen):
         self.collider = pygame.draw.rect(screen, self.colour, (self.x, self.y, self.width, self.height))
-
-
-game = Game()
