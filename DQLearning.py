@@ -39,3 +39,10 @@ class Memory:
 class DQN(nn.Module):
     def __init__(self):
         super(DQN, self).__init__()
+        self.cl1 = nn.Conv2d(3, 16, kernel_size=5, stride=2)
+        self.norm1 = nn.BatchNorm2d(16)
+        self.cl2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
+        self.norm2 = nn.BatchNorm2d(32)
+        self.cl3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
+        self.norm3 = nn.BatchNorm2d(32)
+        self.fc = nn.Linear(448, 2)
