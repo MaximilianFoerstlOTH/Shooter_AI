@@ -8,6 +8,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import random
 
+
 if 'inline' in matplotlib.get_backend():
     from IPython import display
 
@@ -36,13 +37,39 @@ class Memory:
     def __len__(self):
         return len(self.memory)
     
+
 class DQN(nn.Module):
     def __init__(self):
         super(DQN, self).__init__()
-        self.cl1 = nn.Conv2d(3, 16, kernel_size=5, stride=2)
-        self.norm1 = nn.BatchNorm2d(16)
-        self.cl2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
-        self.norm2 = nn.BatchNorm2d(32)
-        self.cl3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
-        self.norm3 = nn.BatchNorm2d(32)
-        self.fc = nn.Linear(448, 2)
+        self.layer1 = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(3, 3),
+            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(3, 3),
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1),
+            torch.nn.Flatten(),
+            torch.nn.Linear(788544, 128)
+        )
+
+        self.layer2 = nn.Sequential(
+            #nn.ReLu(128,64),
+            #nn.ReLu(64,32),
+           # nn.ReLU(32,7)
+            nn.Sigmoid(),
+            nn.Linear(128, 64),
+            nn.Sigmoid(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 7),
+            nn.Sigmoid()
+        )
+
+
+    def forward(self, x):
+        x = self.layer1(x)
+        x = self.layer2(x)
+        #print(x)
+        return x
+    
