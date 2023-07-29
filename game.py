@@ -3,80 +3,141 @@ import time
 from Agent import Agent, Border
 import numpy
 
+pygame.init()
+
 class Game:
     characters = []
-    def __init__(self, agent1 : Agent, agent2 : Agent):
-
+    def __init__(self):
+        self.clock = pygame.time.Clock()
         self.height = 1000
         self.width = 1000
         self.timeUnit = 0
+        self.screen = pygame.display.set_mode((self.width, self.height))
+        self.shootCooldown = [0,0]
         #self.screen = None
-        self.player1 = agent1
-        self.player2 = agent2
-        self.reward = [0,0]
+        self.player1 = None
+        self.player2 = None
         self.border = Border(0, 0, self.width, self.height)
+        #self.player1.setEnemy(self.player2)
+        #self.player2.setEnemy(self.player1)
+        #self.characters.append(self.player1)
+        #self.characters.append(self.player2)
+        #self.startGame()
+
+    def addPlayers(self, player1 : Agent, player2 : Agent):
+        self.player1 = player1
+        self.player2 = player2
         self.player1.setEnemy(self.player2)
         self.player2.setEnemy(self.player1)
         self.characters.append(self.player1)
         self.characters.append(self.player2)
-        self.startGame()
 
-    def playStep(self, screen) ->  bool:
+    def playStep(self, action):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+                
+        done = False
+        reward = [0,0]
         for i in range(len(self.characters)):
-            done = False
-            #screen_data = pygame.surfarray.array3d(screen)
-            #self.characters[i].step(screen_data, self.reward[i], False)
-            self.characters[i].getAction(screen, self.reward[i], False)
-            playercollided = self.characters[i].checkCollisionWithEnemyBullet() or self.border.checkCollision(self.characters[i])
-            #self.border.checkCollision(self.characters[i])
-            if playercollided:
-                self.reward[i] = -100
-                self.reward[i-1] = 100
-                done = True
-            else: 
-                self.reward[i] = 1
+
+            #Move player
+            movex, movey, s, sx,sy = action[i]
+            self.characters[i].Move(movex, movey)
+            for bullet in self.characters[i].bullets:
+                bullet.moveBullet()
+            if self.shootCooldown[i] > 60:
+                self.characters[i].Shoot(s, sx, sy)
+                if s > 0:
+                    self.shootCooldown[i] = 0
+            else:
+                self.shootCooldown[i] += 1
+            
             #Every 10 frames:
             if self.timeUnit == 9:
-                self.border.decreaseRadius(15)
+                self.border.decreaseRadius(2)
             self.timeUnit += 1
             self.timeUnit %= 10
+
+
+            if self.characters[i].checkCollisionWithEnemyBullet():
+                reward[i] = -100
+                reward[i-1] = 100
+                done = True
+                return reward,done
             
-            return done
+            if self.border.checkCollision(self.characters[i]):
+                reward[i] = -100
+                done = True
+                return reward,done
+            
+            else: 
+                reward[i] = 1
+
+        self.render()
+        self.clock.tick(60)
+        #print("FPS: ", self.clock.get_fps())
+            
+        return reward,done
 
 
-    def startGame(self):
-        pygame.init()
-        screen = pygame.display.set_mode((self.width, self.height))
-        clock = pygame.time.Clock()
-        running = True
+    def getState(self):
+        self.surface = pygame.surfarray.array3d(
+            pygame.display.get_surface())
+        return self.surface
 
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
+    def reset(self):
+        self.border = Border(0, 0, self.width, self.height)
+        self.player1.reset()
+        self.player2.reset()
+        self.timeUnit = 0
+        return self.getState()
 
-            #draw to Screen
-            screen.fill((134, 126, 255))
-            for character in self.characters:
-                character.draw(screen)
-                for bullet in character.bullets:
-                    bullet.draw(screen)
-            self.border.draw(screen)
-
-            self.surface = pygame.surfarray.array3d(pygame.display.get_surface())
-            self.height, self.width, self.channels = self.surface.shape
-
-            #Play step
-            if self.playStep(self.surface) == True:
-                running = False
+    def render(self):
+        #   draw to Screen
+        self.screen.fill((134, 126, 255))
+        for character in self.characters:
+            character.draw(self.screen)
+            for bullet in character.bullets:
+                bullet.draw(self.screen)
+        self.border.draw(self.screen)
 
 
-            # flip() the display to put your work on screen
-            pygame.display.flip()
-            #Set FPS
-            clock.tick(60)
+        self.height, self.width, self.channels = self.surface.shape
+        pygame.display.flip() 
 
-        pygame.quit()
+    # def startGame(self):
+    #     screen = pygame.display.set_mode((self.width, self.height))
+    #     clock = pygame.time.Clock()
+    #     running = True
+
+    #     while running:
+    #         for event in pygame.event.get():
+    #             if event.type == pygame.QUIT:
+    #                 running = False
+
+    #         #draw to Screen
+    #         screen.fill((134, 126, 255))
+    #         for character in self.characters:
+    #             character.draw(screen)
+    #             for bullet in character.bullets:
+    #                 bullet.draw(screen)
+    #         self.border.draw(screen)
+
+    #         self.surface = pygame.surfarray.array3d(pygame.display.get_surface())
+    #         self.height, self.width, self.channels = self.surface.shape
+
+    #         #Play step
+    #         if self.playStep() == True:
+    #             running = False
+
+    #         # flip() the display to put your work on screen
+    #         pygame.display.flip()
+    #         #Set FPS
+    #         clock.tick(60)
+
+    #     pygame.quit()
 
 
 

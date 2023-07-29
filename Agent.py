@@ -1,9 +1,15 @@
 import pygame
 import time
-from DQLearning import DQN
+from DQLearning import DQN, Trainer
 from torch.autograd import Variable
+from collections import deque
 import torch
 import random
+import os 
+
+MAX_MEMORY = 10000
+BATCH_SIZE = 1000
+LR = 0.001
 
 class Agent:
     x = 0
@@ -12,28 +18,90 @@ class Agent:
     height = 50
     playerspeed = 5
 
-    def __init__(self, x, y, colour, playernumber):
+    def __init__(self, colour , playernumber):
+
+        self.n_games = 0
+        self.epsilon = 0 
+        self.gamma = 0.9
+        self.memory = deque(maxlen=MAX_MEMORY) # popleft()
+        self.NN = DQN()
+        if torch.cuda.is_available():
+            #Macht das Sinn?
+            self.NN = self.NN.cuda()
+        if os.path.isfile('./model/weights' + str(playernumber) + '.pth'):
+            print("Loading weights")
+        self.trainer = Trainer(self.NN, lr=LR, gamma=self.gamma)
+
         self.colour = colour
-        self.x = x
-        self.y = y
+
+        self.x = 0
+        self.y = 0
+
+        self.playerNumber = playernumber
         self.bullets = []
+        
+        self.reset()
+        
         self.collider = None
         self.enemy = None
         self.moveDir = pygame.math.Vector2(0, 0)
-        self.shotTime = time.time()
-        self.inputs = []
-        self.NN = DQN().cuda()
+        #self.shotTime = time.time()
 
-    def getAction(self, frame, reward, done):
+
+    def getAction(self, frame):
         #input = Variable(torch.Tensor([frame for _ in range(1000*1000)])).cuda()
-        frameTensor = torch.Tensor(frame)
-        inputTensor = frameTensor.view(1, 3, 1000, 1000)
-        inputTensor = Variable(inputTensor).cuda()
-        self.inputs = self.NN.forward(inputTensor)
-        self.Move(random.random(), random.random(), random.random(), random.random())
-        self.Shoot(random.random(), random.random(), random.random())
+        self.epsilon = 150 - self.n_games
+        final_inputs = [0,0,0,0,0]
+
+        if random.randint(0, 200) < self.epsilon:
+            movex = (random.random() - 0.5) *2
+            movey = (random.random() - 0.5) *2
+
+
+
+            shoot = random.randint(0, 1)
+            shootx =(random.random() - 0.5) *20
+            shooty =(random.random() - 0.5) *20
+            final_inputs[0] = movex
+            final_inputs[1] = movey
+            if shoot == 0:
+                final_inputs[2] = 0
+            else:
+                final_inputs[2] = 1
+            final_inputs[3] = shootx
+            final_inputs[4] = shooty
+
+        else:
+            frameTensor = torch.Tensor(frame)
+            #inputTensor = frameTensor.view(3, 1000, 1000)
+            #inputTensor = Variable(inputTensor)
+            if torch.cuda.is_available():
+                inputTensor = inputTensor.cuda()
+                
+            inputs = self.NN(frameTensor)
+            final_inputs[0] = inputs[0][0]
+            final_inputs[1] = inputs[0][1]
+            final_inputs[2] = inputs[0][2]
+            final_inputs[3] = inputs[0][3]
+            final_inputs[4] = inputs[0][4]
+
+        return final_inputs
         #self.Move(self.inputs[0][0], self.inputs[0][1], self.inputs[0][2], self.inputs[0][3])
         #self.Shoot(self.inputs[0][4], self.inputs[0][5], self.inputs[0][6])
+
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done)) 
+
+    def trainLongMemory(self):
+        if len(self.memory) > BATCH_SIZE:
+            mini_sample = random.sample(self.memory, BATCH_SIZE) # list of tuples
+        else:
+            mini_sample = self.memory
+        states, actions, rewards, next_states, dones = zip(*mini_sample)
+        self.trainer.train_step(states, actions, rewards, next_states, dones)        
+    
+    def train_short_memory(self, state, action, reward, next_state, done):
+        self.trainer.train_step(state, action, reward, next_state, done)
 
     def MoveWitKey(self):
         #Player Movement
@@ -51,7 +119,6 @@ class Agent:
             self.moveDir = self.moveDir.normalize()
         self.x += self.moveDir.x * self.playerspeed
         self.y += self.moveDir.y * self.playerspeed
-
     def ShootMouse(self):
         #Player Shooting 
         mouse_buttons = pygame.mouse.get_pressed()
@@ -67,18 +134,12 @@ class Agent:
         for bullet in self.bullets:
             bullet.moveBullet()
 
-    def Move(self, l, r, u, d):
+    def Move(self, movex : float , movey : float):
         #Player Movement
         self.moveDir = pygame.math.Vector2(0, 0)
-        keys = pygame.key.get_pressed()
-        if l > 0.8:
-            self.moveDir.x -= 1
-        if r > 0.8:
-            self.moveDir.x += 1
-        if u > 0.8:
-            self.moveDir.y -= 1
-        if d > 0.8:
-            self.moveDir.y += 1
+        self.moveDir.x = movex
+        self.moveDir.y = movey
+
         if self.moveDir.x != 0 or self.moveDir.y != 0:
             self.moveDir = self.moveDir.normalize()
         self.x += self.moveDir.x * self.playerspeed
@@ -86,20 +147,27 @@ class Agent:
 
     def Shoot(self, boolshoot, shootx, shooty):
         #Player Shooting 
-        if boolshoot > 0.8 and self.shotTime + 1 < time.time():
+        if boolshoot > 0:
             #moveVec = pygame.math.Vector2(shootx - self.x, shooty - self.y)
             moveVec = pygame.math.Vector2(shootx ,shooty)
             if moveVec.x != 0 or moveVec.y != 0:
                 moveVec = moveVec.normalize()
             bullet = Bullet(self.x, self.y, moveVec, self)
             self.bullets.append(bullet)            
-            self.shotTime = time.time()
-
-        for bullet in self.bullets:
-            bullet.moveBullet()
+            #self.shotTime = time.time()
     def setEnemy(self, enemy):
         self.enemy = enemy
 
+    def reset(self):
+        self.x = random.randint(100,400)
+        self.y = random.randint(100,400)
+
+        if self.playerNumber == 1:
+            self.x += 500
+            self.y += 500
+
+        for bullet in self.bullets :
+            bullet.destroyBullet()
 
     def checkCollisionWithEnemyBullet(self) -> bool:
         for bullet in self.enemy.bullets:
@@ -179,3 +247,4 @@ class Border:
         if self.width <= 0 or self.height <= 0:
             self.width = 0
             self.height = 0
+
