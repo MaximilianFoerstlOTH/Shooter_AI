@@ -23,41 +23,38 @@ Tensor = FloatTensor
 class DQN(nn.Module):
     def __init__(self):
         super(DQN, self).__init__()
-        self.layer1 = nn.Sequential(
-            #nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(in_channels=3, out_channels=3, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(3, 3),
-            #nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(in_channels=3, out_channels=3, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(3, 3),
-            #nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(in_channels=3, out_channels=3, kernel_size=3, stride=1, padding=1),
-            torch.nn.Flatten(),
-            #torch.nn.Linear(788544, 128)
-            torch.nn.Linear(36963, 128) 
-        )
+        #self.layer1 = nn.Sequential(
+        #    nn.Conv2d(in_channels=3, out_channels=4, kernel_size=3, stride=1, padding=1),
+        #    nn.ReLU(),
+        #    nn.MaxPool2d(3, 3),
+        #    nn.Conv2d(in_channels=4, out_channels=8, kernel_size=3, stride=1, padding=1),
+        #    nn.ReLU(),
+        #    nn.MaxPool2d(3, 3),
+        #    nn.Conv2d(in_channels=8, out_channels=8, kernel_size=3, stride=1, padding=1),
+        #    torch.nn.Flatten(),
+        #    torch.nn.Linear(98568, 128)
+        #)
 
         self.layer2 = nn.Sequential(
+            nn.Linear(17,128),
             nn.Sigmoid(),
             nn.Linear(128, 64),
             nn.Sigmoid(),
             nn.Linear(64, 32),
             nn.ReLU(),
             nn.Linear(32, 5),
-            nn.Tanh()
+            nn.Softmax()
         )
 
 
     def forward(self, x):
-        if len(x.shape) == 4:
-            x = x.permute(0,3,1,2)
-        else:
-            x = x.permute(2,0,1)
-            x = x.unsqueeze(0)
+        #if len(x.shape) == 4:
+        #    x = x.permute(0,3,1,2)
+        #else:
+        #    x = x.permute(2,0,1)
+        #    x = x.unsqueeze(0)
 
-        x = self.layer1(x)
+        #x = self.layer1(x)
         x = self.layer2(x)
         #print("movex: " + str(x[0][0].item()) + " movey: " + str(x[0][1].item()))
         return x
@@ -86,14 +83,20 @@ class Trainer:
         action = torch.tensor(action, dtype=torch.float)
         reward = torch.tensor(reward, dtype=torch.float)
         # (n, x)
-        if len(state.shape) == 3:
-            # (1, x)
-            #state = torch.unsqueeze(state, 0)
+        if len(state.shape) == 1:
+            #(1, x)
+            state = torch.unsqueeze(state, 0)
             next_state = torch.unsqueeze(next_state, 0)
             action = torch.unsqueeze(action, 0)
             reward = torch.unsqueeze(reward, 0)
             done = (done, )
         # 1: predicted Q values with current state
+        if torch.cuda.is_available():
+            state = state.cuda()
+            next_state = next_state.cuda()
+            action = action.cuda()
+            reward = reward.cuda()
+
         pred = self.model(state)
         
         target = pred.clone()
@@ -110,3 +113,4 @@ class Trainer:
         loss.backward()
 
         self.optimizer.step()
+        

@@ -32,6 +32,7 @@ class Game:
         self.characters.append(self.player1)
         self.characters.append(self.player2)
 
+
     def playStep(self, action):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -42,6 +43,28 @@ class Game:
         reward = [0,0]
         for i in range(len(self.characters)):
 
+            for bullet in self.characters[i].bullets:
+                if bullet.collisionWithPlayer():
+                    print("Player ", i+1 , self.characters[i].colour , " got hit by enemy bullet")
+                    reward[i] = -100
+                    reward[i-1] = 20
+                    done = True
+                    return reward,done
+            #if self.characters[i].checkCollisionWithEnemyBullet():
+                            #if self.player1.checkCollisionWithEnemyBullet() or self.player2.checkCollisionWithEnemyBullet():
+                #print("Player ", i+1 , " got hit by enemy bullet")
+                #reward[i] = -100
+                #reward[i-1] = 100
+                #done = True
+                #return reward,done
+            
+            if self.border.checkCollision(self.characters[i]):
+                reward[i] = -100
+                done = True
+                return reward,done
+            
+            else: 
+                reward[i] = 1
             #Move player
             movex, movey, s, sx,sy = action[i]
             self.characters[i].Move(movex, movey)
@@ -61,20 +84,6 @@ class Game:
             self.timeUnit %= 10
 
 
-            if self.characters[i].checkCollisionWithEnemyBullet():
-                reward[i] = -100
-                reward[i-1] = 100
-                done = True
-                return reward,done
-            
-            if self.border.checkCollision(self.characters[i]):
-                reward[i] = -100
-                done = True
-                return reward,done
-            
-            else: 
-                reward[i] = 1
-
         self.render()
         self.clock.tick(60)
         #print("FPS: ", self.clock.get_fps())
@@ -83,16 +92,17 @@ class Game:
 
 
     def getState(self):
-        self.surface = pygame.surfarray.array3d(
-            pygame.display.get_surface())
-        return self.surface
+        p1Nx, p1Ny, p1Ndx, p1Ndy = self.player1.findNearestBullet()
+        p2Nx, p2Ny, p2Ndx, p2Ndy = self.player2.findNearestBullet()
+        return numpy.array([self.player1.x, self.player1.y, self.player1.moveDir.x, self.player1.moveDir.y , p1Nx, p1Ny, p1Ndx, p1Ndy , self.player2.x, self.player2.y,self.player2.moveDir.x, self.player2.moveDir.y , p2Nx, p2Ny, p2Ndx, p2Ndy, self.border.width])
 
     def reset(self):
-        self.border = Border(0, 0, self.width, self.height)
         self.player1.reset()
         self.player2.reset()
+        self.border = Border(0, 0, self.width, self.height)
+        self.render()
         self.timeUnit = 0
-        return self.getState()
+        #return self.getState()
 
     def render(self):
         #   draw to Screen
@@ -103,7 +113,7 @@ class Game:
                 bullet.draw(self.screen)
         self.border.draw(self.screen)
 
-
+        self.surface = pygame.surfarray.array3d(pygame.display.get_surface())
         self.height, self.width, self.channels = self.surface.shape
         pygame.display.flip() 
 

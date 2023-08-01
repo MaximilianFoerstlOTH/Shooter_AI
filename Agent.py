@@ -1,3 +1,4 @@
+import math
 import pygame
 import time
 from DQLearning import DQN, Trainer
@@ -28,14 +29,16 @@ class Agent:
         if torch.cuda.is_available():
             #Macht das Sinn?
             self.NN = self.NN.cuda()
-        if os.path.isfile('./model/weights' + str(playernumber) + '.pth'):
+        if os.path.isfile('./model/weights' + str(playernumber+1) + '.pth'):
             print("Loading weights")
+            self.NN.load_state_dict(torch.load('./model/weights' + str(playernumber+1) + '.pth'))
         self.trainer = Trainer(self.NN, lr=LR, gamma=self.gamma)
 
         self.colour = colour
 
         self.x = 0
         self.y = 0
+        self.moveDir = pygame.math.Vector2(0, 0)
 
         self.playerNumber = playernumber
         self.bullets = []
@@ -48,12 +51,12 @@ class Agent:
         #self.shotTime = time.time()
 
 
-    def getAction(self, frame):
-        #input = Variable(torch.Tensor([frame for _ in range(1000*1000)])).cuda()
-        self.epsilon = 150 - self.n_games
+    def getAction(self, input):
+        self.epsilon = 80 - self.n_games
         final_inputs = [0,0,0,0,0]
 
-        if random.randint(0, 200) < self.epsilon:
+
+        if random.randint(0, 120) < self.epsilon:
             movex = (random.random() - 0.5) *2
             movey = (random.random() - 0.5) *2
 
@@ -71,24 +74,44 @@ class Agent:
             final_inputs[3] = shootx
             final_inputs[4] = shooty
 
-        else:
-            frameTensor = torch.Tensor(frame)
-            #inputTensor = frameTensor.view(3, 1000, 1000)
-            #inputTensor = Variable(inputTensor)
-            if torch.cuda.is_available():
-                inputTensor = inputTensor.cuda()
-                
-            inputs = self.NN(frameTensor)
-            final_inputs[0] = inputs[0][0]
-            final_inputs[1] = inputs[0][1]
-            final_inputs[2] = inputs[0][2]
-            final_inputs[3] = inputs[0][3]
-            final_inputs[4] = inputs[0][4]
+            return final_inputs
 
-        return final_inputs
+        else:
+            return self.getActionNoRandom(input)
+        #    frameTensor = torch.Tensor(frame)
+
+        #    if torch.cuda.is_available():
+        #        frameTensor = frameTensor.cuda()
+            
+                
+        #    inputs = self.NN(frameTensor)
+
+        #    final_inputs[0] = inputs[0][0]
+        #    final_inputs[1] = inputs[0][1]
+        #    final_inputs[2] = inputs[0][2]
+        #    final_inputs[3] = inputs[0][3]
+        #    final_inputs[4] = inputs[0][4]
+
+        #return final_inputs
         #self.Move(self.inputs[0][0], self.inputs[0][1], self.inputs[0][2], self.inputs[0][3])
         #self.Shoot(self.inputs[0][4], self.inputs[0][5], self.inputs[0][6])
 
+    def getActionNoRandom(self, input):
+        frameTensor = torch.Tensor(input)
+        final_inputs = [0,0,0,0,0]
+        if torch.cuda.is_available():
+            frameTensor = frameTensor.cuda()
+            
+                
+        inputs = self.NN(frameTensor)
+
+        final_inputs[0] = inputs[0]
+        final_inputs[1] = inputs[1]
+        final_inputs[2] = inputs[2]
+        final_inputs[3] = inputs[3]
+        final_inputs[4] = inputs[4]
+        return final_inputs
+    
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done)) 
 
@@ -136,7 +159,6 @@ class Agent:
 
     def Move(self, movex : float , movey : float):
         #Player Movement
-        self.moveDir = pygame.math.Vector2(0, 0)
         self.moveDir.x = movex
         self.moveDir.y = movey
 
@@ -155,32 +177,46 @@ class Agent:
             bullet = Bullet(self.x, self.y, moveVec, self)
             self.bullets.append(bullet)            
             #self.shotTime = time.time()
+
+    def findNearestBullet(self) :
+        minDistance = 100000
+        if len(self.enemy.bullets) == 0:
+            return 0,0,0,0
+        for bullet in self.enemy.bullets:
+            if bullet.collider is not None:
+                distance = math.sqrt((self.x - bullet.x)**2 + (self.y - bullet.y)**2)
+                if distance < minDistance:
+                    minDistance = distance
+                    self.nearestBullet = bullet
+        return self.nearestBullet.x, self.nearestBullet.y, self.nearestBullet.direction.x, self.nearestBullet.direction.y
+    
     def setEnemy(self, enemy):
         self.enemy = enemy
 
     def reset(self):
         self.x = random.randint(100,400)
         self.y = random.randint(100,400)
-
         if self.playerNumber == 1:
             self.x += 500
             self.y += 500
 
         for bullet in self.bullets :
             bullet.destroyBullet()
+        self.bullets.clear()
 
     def checkCollisionWithEnemyBullet(self) -> bool:
         for bullet in self.enemy.bullets:
             if bullet.collider is not None:
                 if self.collider.colliderect(bullet.collider) :
                     bullet.destroyBullet()
-                    return self.killPlayer()
+                    self.killPlayer()
+                    return True
                 else: 
                     return False
                 
 
     def killPlayer(self) -> bool:
-        print("Player died")
+        print("Player " + str(self.playerNumber) + " " + self.colour +  " died in the Border")
         return True
     
 
@@ -209,6 +245,7 @@ class Bullet:
         self.x += self.direction.x * self.shootSpeed
         self.y += self.direction.y * self.shootSpeed
         self.TimeToLive -= 1
+        
         if self.TimeToLive <= 0:
             self.destroyBullet()
 
@@ -218,6 +255,13 @@ class Bullet:
 
     def draw(self, screen):
         self.collider = pygame.draw.rect(screen, self.colour, (self.x, self.y, self.width, self.height))
+
+    def collisionWithPlayer(self) -> bool:
+        if self.shotby.enemy.collider is not None:
+            if self.collider.colliderect(self.shotby.enemy.collider) :
+                return True
+            else: 
+                return False
 
 class Border: 
     def __init__(self, x, y, width, height):
@@ -231,14 +275,14 @@ class Border:
     def draw(self, screen):
         self.collider = pygame.draw.rect(screen, (255, 0, 0), (self.x, self.y, self.width, self.height), self.broadth)
 
-    def checkCollision(self, player) -> int:
+    def checkCollision(self, player):
         if player is not None:
             if player.collider is not None:
                 if not player.collider.colliderect(pygame.Rect(self.broadth +self.x + player.width ,self.broadth + self.y +player.height ,1000 - player.width *2 -(1000- self.width) - self.broadth *2, 1000  - player.height *2 - (1000 -self.height) - self.broadth * 2)):
-                    return player.killPlayer()
-                
-                else:
-                    return 0
+                    player.killPlayer()
+                    return True
+        return False
+
     def decreaseRadius(self, amount):
         self.width -= amount
         self.height -= amount
