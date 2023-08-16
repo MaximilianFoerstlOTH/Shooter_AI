@@ -8,10 +8,6 @@ agent2 = Agent("darkgreen" , 1)
 game.addPlayers(agent1, agent2)
 
 def train():
-#    game = Game()
-#    agent1 = Agent("blue" ,0)
-#    agent2 = Agent("darkgreen" , 1)
-#    game.addPlayers(agent1, agent2)
     while True:
         #get state
         state_old = game.getState()
@@ -73,5 +69,5 @@ def play():
             
 
 if __name__ == "__main__":
-    train()
-    #play()
+    #train()
+    play()

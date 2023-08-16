@@ -2,15 +2,15 @@ import pygame
 import time
 from Agent import Agent, Border
 import numpy
-
+from const import width
 pygame.init()
 
 class Game:
     characters = []
     def __init__(self):
         self.clock = pygame.time.Clock()
-        self.height = 1000
-        self.width = 1000
+        self.height = width
+        self.width = width
         self.timeUnit = 0
         self.screen = pygame.display.set_mode((self.width, self.height))
         self.shootCooldown = [0,0]

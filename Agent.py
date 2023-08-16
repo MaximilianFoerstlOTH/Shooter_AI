@@ -6,11 +6,13 @@ from torch.autograd import Variable
 from collections import deque
 import torch
 import random
-import os 
+import os
+from const import width
 
-MAX_MEMORY = 10000
-BATCH_SIZE = 1000
+MAX_MEMORY = 1000
+BATCH_SIZE = 100
 LR = 0.001
+
 
 class Agent:
     x = 0
@@ -19,19 +21,24 @@ class Agent:
     height = 50
     playerspeed = 5
 
-    def __init__(self, colour , playernumber):
+    def __init__(self, colour, playernumber):
 
         self.n_games = 0
-        self.epsilon = 0 
+        self.epsilon = 0
         self.gamma = 0.9
-        self.memory = deque(maxlen=MAX_MEMORY) # popleft()
+        self.memory = deque(maxlen=MAX_MEMORY)  # popleft()
         self.NN = DQN()
         if torch.cuda.is_available():
-            #Macht das Sinn?
+            # Macht das Sinn?
             self.NN = self.NN.cuda()
         if os.path.isfile('./model/weights' + str(playernumber+1) + '.pth'):
             print("Loading weights")
-            self.NN.load_state_dict(torch.load('./model/weights' + str(playernumber+1) + '.pth'))
+            if torch.cuda.is_available():
+                self.NN.load_state_dict(torch.load(
+                    './model/weights' + str(playernumber+1) + '.pth'))
+            else:
+                self.NN.load_state_dict(torch.load(
+                    './model/weights' + str(playernumber+1) + '.pth', map_location=torch.device('cpu')))
         self.trainer = Trainer(self.NN, lr=LR, gamma=self.gamma)
 
         self.colour = colour
@@ -42,29 +49,25 @@ class Agent:
 
         self.playerNumber = playernumber
         self.bullets = []
-        
+
         self.reset()
-        
+
         self.collider = None
         self.enemy = None
         self.moveDir = pygame.math.Vector2(0, 0)
-        #self.shotTime = time.time()
-
+        # self.shotTime = time.time()
 
     def getAction(self, input):
         self.epsilon = 80 - self.n_games
-        final_inputs = [0,0,0,0,0]
-
+        final_inputs = [0, 0, 0, 0, 0]
 
         if random.randint(0, 120) < self.epsilon:
-            movex = (random.random() - 0.5) *2
-            movey = (random.random() - 0.5) *2
-
-
+            movex = (random.random() - 0.5) * 2
+            movey = (random.random() - 0.5) * 2
 
             shoot = random.randint(0, 1)
-            shootx =(random.random() - 0.5) *20
-            shooty =(random.random() - 0.5) *20
+            shootx = (random.random() - 0.5) * 20
+            shooty = (random.random() - 0.5) * 20
             final_inputs[0] = movex
             final_inputs[1] = movey
             if shoot == 0:
@@ -82,8 +85,7 @@ class Agent:
 
         #    if torch.cuda.is_available():
         #        frameTensor = frameTensor.cuda()
-            
-                
+
         #    inputs = self.NN(frameTensor)
 
         #    final_inputs[0] = inputs[0][0]
@@ -92,17 +94,16 @@ class Agent:
         #    final_inputs[3] = inputs[0][3]
         #    final_inputs[4] = inputs[0][4]
 
-        #return final_inputs
-        #self.Move(self.inputs[0][0], self.inputs[0][1], self.inputs[0][2], self.inputs[0][3])
-        #self.Shoot(self.inputs[0][4], self.inputs[0][5], self.inputs[0][6])
+        # return final_inputs
+        # self.Move(self.inputs[0][0], self.inputs[0][1], self.inputs[0][2], self.inputs[0][3])
+        # self.Shoot(self.inputs[0][4], self.inputs[0][5], self.inputs[0][6])
 
     def getActionNoRandom(self, input):
         frameTensor = torch.Tensor(input)
-        final_inputs = [0,0,0,0,0]
+        final_inputs = [0, 0, 0, 0, 0]
         if torch.cuda.is_available():
             frameTensor = frameTensor.cuda()
-            
-                
+
         inputs = self.NN(frameTensor)
 
         final_inputs[0] = inputs[0]
@@ -111,23 +112,24 @@ class Agent:
         final_inputs[3] = inputs[3]
         final_inputs[4] = inputs[4]
         return final_inputs
-    
+
     def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done)) 
+        self.memory.append((state, action, reward, next_state, done))
 
     def trainLongMemory(self):
         if len(self.memory) > BATCH_SIZE:
-            mini_sample = random.sample(self.memory, BATCH_SIZE) # list of tuples
+            mini_sample = random.sample(
+                self.memory, BATCH_SIZE)  # list of tuples
         else:
             mini_sample = self.memory
         states, actions, rewards, next_states, dones = zip(*mini_sample)
-        self.trainer.train_step(states, actions, rewards, next_states, dones)        
-    
+        self.trainer.train_step(states, actions, rewards, next_states, dones)
+
     def train_short_memory(self, state, action, reward, next_state, done):
         self.trainer.train_step(state, action, reward, next_state, done)
 
     def MoveWitKey(self):
-        #Player Movement
+        # Player Movement
         self.moveDir = pygame.math.Vector2(0, 0)
         keys = pygame.key.get_pressed()
         if keys[pygame.K_a]:
@@ -142,23 +144,25 @@ class Agent:
             self.moveDir = self.moveDir.normalize()
         self.x += self.moveDir.x * self.playerspeed
         self.y += self.moveDir.y * self.playerspeed
+
     def ShootMouse(self):
-        #Player Shooting 
+        # Player Shooting
         mouse_buttons = pygame.mouse.get_pressed()
         if mouse_buttons[0] and self.shotTime + 1 < time.time():
             click_pos = pygame.mouse.get_pos()
-            moveVec = pygame.math.Vector2(click_pos[0] - self.x, click_pos[1] - self.y)
+            moveVec = pygame.math.Vector2(
+                click_pos[0] - self.x, click_pos[1] - self.y)
             if moveVec.x != 0 or moveVec.y != 0:
                 moveVec = moveVec.normalize()
             bullet = Bullet(self.x, self.y, moveVec, self)
-            self.bullets.append(bullet)            
+            self.bullets.append(bullet)
             self.shotTime = time.time()
 
         for bullet in self.bullets:
             bullet.moveBullet()
 
-    def Move(self, movex : float , movey : float):
-        #Player Movement
+    def Move(self, movex: float, movey: float):
+        # Player Movement
         self.moveDir.x = movex
         self.moveDir.y = movey
 
@@ -168,61 +172,62 @@ class Agent:
         self.y += self.moveDir.y * self.playerspeed
 
     def Shoot(self, boolshoot, shootx, shooty):
-        #Player Shooting 
+        # Player Shooting
         if boolshoot > 0:
-            #moveVec = pygame.math.Vector2(shootx - self.x, shooty - self.y)
-            moveVec = pygame.math.Vector2(shootx ,shooty)
+            # moveVec = pygame.math.Vector2(shootx - self.x, shooty - self.y)
+            moveVec = pygame.math.Vector2(shootx, shooty)
             if moveVec.x != 0 or moveVec.y != 0:
                 moveVec = moveVec.normalize()
             bullet = Bullet(self.x, self.y, moveVec, self)
-            self.bullets.append(bullet)            
-            #self.shotTime = time.time()
+            self.bullets.append(bullet)
+            # self.shotTime = time.time()
 
-    def findNearestBullet(self) :
+    def findNearestBullet(self):
         minDistance = 100000
         if len(self.enemy.bullets) == 0:
-            return 0,0,0,0
+            return 0, 0, 0, 0
         for bullet in self.enemy.bullets:
             if bullet.collider is not None:
-                distance = math.sqrt((self.x - bullet.x)**2 + (self.y - bullet.y)**2)
+                distance = math.sqrt((self.x - bullet.x) **
+                                     2 + (self.y - bullet.y)**2)
                 if distance < minDistance:
                     minDistance = distance
                     self.nearestBullet = bullet
         return self.nearestBullet.x, self.nearestBullet.y, self.nearestBullet.direction.x, self.nearestBullet.direction.y
-    
+
     def setEnemy(self, enemy):
         self.enemy = enemy
 
     def reset(self):
-        self.x = random.randint(100,400)
-        self.y = random.randint(100,400)
+        self.x = random.randint(width / 10, width / 10 * 4)
+        self.y = random.randint(width / 10, width / 10 * 4)
         if self.playerNumber == 1:
-            self.x += 500
-            self.y += 500
+            self.x += width / 2
+            self.y += width / 2
 
-        for bullet in self.bullets :
+        for bullet in self.bullets:
             bullet.destroyBullet()
         self.bullets.clear()
 
     def checkCollisionWithEnemyBullet(self) -> bool:
         for bullet in self.enemy.bullets:
             if bullet.collider is not None:
-                if self.collider.colliderect(bullet.collider) :
+                if self.collider.colliderect(bullet.collider):
                     bullet.destroyBullet()
                     self.killPlayer()
                     return True
-                else: 
+                else:
                     return False
-                
 
     def killPlayer(self) -> bool:
-        print("Player " + str(self.playerNumber) + " " + self.colour +  " died in the Border")
+        print("Player " + str(self.playerNumber) +
+              " " + self.colour + " died in the Border")
         return True
-    
 
     def draw(self, screen):
-        self.collider = pygame.draw.rect(screen, self.colour, (self.x, self.y, self.width, self.height))
-        
+        self.collider = pygame.draw.rect(
+            screen, self.colour, (self.x, self.y, self.width, self.height))
+
 
 class Bullet:
     x = 0
@@ -234,7 +239,7 @@ class Bullet:
     shootSpeed = 8
     TimeToLive = 1000
 
-    def __init__(self, x, y, direction : pygame.math.Vector2, shotBy : Agent):
+    def __init__(self, x, y, direction: pygame.math.Vector2, shotBy: Agent):
         self.x = x
         self.y = y
         self.direction = direction
@@ -245,7 +250,7 @@ class Bullet:
         self.x += self.direction.x * self.shootSpeed
         self.y += self.direction.y * self.shootSpeed
         self.TimeToLive -= 1
-        
+
         if self.TimeToLive <= 0:
             self.destroyBullet()
 
@@ -254,16 +259,18 @@ class Bullet:
         del self
 
     def draw(self, screen):
-        self.collider = pygame.draw.rect(screen, self.colour, (self.x, self.y, self.width, self.height))
+        self.collider = pygame.draw.rect(
+            screen, self.colour, (self.x, self.y, self.width, self.height))
 
     def collisionWithPlayer(self) -> bool:
         if self.shotby.enemy.collider is not None:
-            if self.collider.colliderect(self.shotby.enemy.collider) :
+            if self.collider.colliderect(self.shotby.enemy.collider):
                 return True
-            else: 
+            else:
                 return False
 
-class Border: 
+
+class Border:
     def __init__(self, x, y, width, height):
         self.x = x
         self.y = y
@@ -273,12 +280,13 @@ class Border:
         self.broadth = 10
 
     def draw(self, screen):
-        self.collider = pygame.draw.rect(screen, (255, 0, 0), (self.x, self.y, self.width, self.height), self.broadth)
+        self.collider = pygame.draw.rect(
+            screen, (255, 0, 0), (self.x, self.y, self.width, self.height), self.broadth)
 
     def checkCollision(self, player):
         if player is not None:
             if player.collider is not None:
-                if not player.collider.colliderect(pygame.Rect(self.broadth +self.x + player.width ,self.broadth + self.y +player.height ,1000 - player.width *2 -(1000- self.width) - self.broadth *2, 1000  - player.height *2 - (1000 -self.height) - self.broadth * 2)):
+                if not player.collider.colliderect(pygame.Rect(self.broadth + self.x + player.width, self.broadth + self.y + player.height, 1000 - player.width * 2 - (1000 - self.width) - self.broadth * 2, 1000 - player.height * 2 - (1000 - self.height) - self.broadth * 2)):
                     player.killPlayer()
                     return True
         return False
@@ -291,4 +299,3 @@ class Border:
         if self.width <= 0 or self.height <= 0:
             self.width = 0
             self.height = 0
-
