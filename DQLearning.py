@@ -6,11 +6,10 @@ import torchvision.transforms as T
 import torch.nn.functional as F
 import matplotlib
 import matplotlib.pyplot as plt
-import random
 import os
 import numpy as np
 
-if 'inline' in matplotlib.get_backend():
+if "inline" in matplotlib.get_backend():
     from IPython import display
 
 plt.ion()
@@ -24,43 +23,17 @@ Tensor = FloatTensor
 class DQN(nn.Module):
     def __init__(self):
         super(DQN, self).__init__()
-        # self.layer1 = nn.Sequential(
-        #    nn.Conv2d(in_channels=3, out_channels=4, kernel_size=3, stride=1, padding=1),
-        #    nn.ReLU(),
-        #    nn.MaxPool2d(3, 3),
-        #    nn.Conv2d(in_channels=4, out_channels=8, kernel_size=3, stride=1, padding=1),
-        #    nn.ReLU(),
-        #    nn.MaxPool2d(3, 3),
-        #    nn.Conv2d(in_channels=8, out_channels=8, kernel_size=3, stride=1, padding=1),
-        #    torch.nn.Flatten(),
-        #    torch.nn.Linear(98568, 128)
-        # )
-
-        self.layer2 = nn.Sequential(
-            nn.Linear(17, 128),
-            nn.Sigmoid(),
-            nn.Linear(128, 64),
-            nn.Sigmoid(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, 5),
-            nn.Softmax()
-        )
+        self.fc1 = nn.Linear(17, 64)
+        self.fc2 = nn.Linear(64, 32)
+        self.fc3 = nn.Linear(32, 8)
 
     def forward(self, x):
-        # if len(x.shape) == 4:
-        #    x = x.permute(0,3,1,2)
-        # else:
-        #    x = x.permute(2,0,1)
-        #    x = x.unsqueeze(0)
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        return self.fc3(x)
 
-        # x = self.layer1(x)
-        x = self.layer2(x)
-        # print("movex: " + str(x[0][0].item()) + " movey: " + str(x[0][1].item()))
-        return x
-
-    def save(self, file_name='model.pth'):
-        model_folder_path = './model'
+    def save(self, file_name="model.pth"):
+        model_folder_path = "./model"
         if not os.path.exists(model_folder_path):
             os.makedirs(model_folder_path)
 
@@ -77,7 +50,6 @@ class Trainer:
         self.criterion = nn.MSELoss()
 
     def train_step(self, state, action, reward, next_state, done):
-
         state = torch.tensor(np.array(state), dtype=torch.float)
         next_state = torch.tensor(np.array(next_state), dtype=torch.float)
         action = torch.tensor(action, dtype=torch.float)
@@ -89,7 +61,7 @@ class Trainer:
             next_state = torch.unsqueeze(next_state, 0)
             action = torch.unsqueeze(action, 0)
             reward = torch.unsqueeze(reward, 0)
-            done = (done, )
+            done = (done,)
         # 1: predicted Q values with current state
         if torch.cuda.is_available():
             state = state.cuda()
@@ -99,18 +71,23 @@ class Trainer:
 
         pred = self.model(state)
 
-        target = pred.clone()
+        loss = 0  # Initialize loss
+
         for idx in range(len(done)):
-            Q_new = reward[idx]
             if not done[idx]:
-                Q_new = reward[idx] + self.gamma * \
-                    torch.max(self.model(next_state[idx]))
+                max_future_q = torch.max(self.model(next_state[idx]))
+                new_q = reward[idx] + self.gamma * max_future_q
+            else:
+                new_q = reward[idx]
 
-            target[idx][torch.argmax(action[idx]).item()] = Q_new
+            # Update Q value for given state
+            current_qs = pred[idx].clone()
+            current_qs[action[idx].long()] = new_q
+            # Update the loss using the Q-learning equation
+            loss += F.mse_loss(current_qs, pred[idx])
 
-        # 2: Q_new = r + y * max(next_predicted Q value) -> only do this if not done
-        self.optimizer.zero_grad()
-        loss = self.criterion(target, pred)
+        # Backpropagate and update the neural network
         loss.backward()
+        self.optimizer.zero_grad()
 
         self.optimizer.step()
