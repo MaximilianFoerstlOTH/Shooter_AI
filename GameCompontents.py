@@ -3,6 +3,7 @@ import time
 import numpy
 from const import width
 import random
+import math
 
 
 class Square:
@@ -20,6 +21,7 @@ class Square:
         self.collider = None
         self.enemy = None
         self.moveDir = pygame.math.Vector2(0, 0)
+        self.nearestEnemyBullet = None
 
     def draw(self, screen):
         self.collider = pygame.draw.rect(
@@ -146,6 +148,21 @@ class Square:
         for bullet in self.bullets:
             bullet.destroyBullet()
         self.bullets.clear()
+
+    def findNearestEnemyBullet(self, enemy):
+        if enemy is None:
+            return
+        nearestBullet = None
+        nearestDistance = 10000
+        for bullet in enemy.bullets:
+            if bullet.collider is not None:
+                distance = math.sqrt(
+                    (bullet.x - self.x) ** 2 + (bullet.y - self.y) ** 2
+                )
+                if distance < nearestDistance:
+                    nearestDistance = distance
+                    nearestBullet = bullet
+        self.nearestEnemyBullet = nearestBullet
 
 
 class Bullet:

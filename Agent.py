@@ -1,5 +1,4 @@
 import math
-from DQLearning import DQN, Trainer
 from torch.autograd import Variable
 import torch.nn as nn
 from collections import deque
@@ -11,8 +10,8 @@ from Player import Player
 import torch.optim as optim
 import numpy as np
 
-MAX_MEMORY = 100000
-BATCH_SIZE = 15000
+MAX_MEMORY = 10000
+BATCH_SIZE = 500
 LR = 0.005
 
 
@@ -21,8 +20,8 @@ class Agent(Player):
         super().__init__(colour, playernumber)
         self.n_games = 0
         self.epsilon = 0.95
-        self.epsilonDecay = 0.9995
-        self.epsilonMin = 0.01
+        self.epsilonDecay = 0.99995
+        self.epsilonMin = 0.1
         self.gamma = 0.9
         self.memory = deque(maxlen=MAX_MEMORY)  # popleft()
         self.NN = DQN()
